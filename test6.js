@@ -17,18 +17,18 @@ console.log(endTime);
 
 async function storeData(to, from, timestamp) {
   var address = await prisma.ContractAddresses.findUnique({
-    where: { address: to },
+    where: { address: to.toLowerCase() },
   });
 
   if (address == null) {
     address = await prisma.ContractAddresses.create({
-      data: { address: to },
+      data: { address: to.toLowerCase() },
     });
   }
 
   await prisma.InteractedAddresses.create({
     data: {
-      address: from,
+      address: from.toLowerCase(),
       timestamp: timestamp,
       ContractAddresses: {
         connect: {
@@ -126,7 +126,7 @@ app.get("/address/:address", async (req, res) => {
   const address = req.params.address;
 
   const addressData = await prisma.ContractAddresses.findUnique({
-    where: { address: address },
+    where: { address: address.toLowerCase() },
     include: { InteractedAddresses: true },
   });
 
