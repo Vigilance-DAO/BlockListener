@@ -1,0 +1,25 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ContractAddresses {
+  id           Int       @id @default(autoincrement())
+  address       String    @unique
+  InteractedAddresses InteractedAddresses[]
+}
+
+model InteractedAddresses {
+  id           Int       @id @default(autoincrement())
+  address      String    
+  timestamp    Int
+  contractAddressId Int 
+  ContractAddresses ContractAddresses @relation(fields: [contractAddressId], references: [id])
+}

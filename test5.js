@@ -9,7 +9,7 @@ const app = express();
 var toAddress;
 const chain = EvmChain.ETHEREUM;
 const MORALIS_API_KEY =
-  "OCGCYyI8WZ8w7FIj23gFSMN4aT0KnO2DoJLikWYGEzkWYC8ujhPrlxP8rvfrqk36";
+  "**";
 
 const provider = new ethers.providers.JsonRpcProvider(
   "https://eth-mainnet.g.alchemy.com/v2/4xXf1FH27swhdk6hsQ1qMGqPZRfU59MN"
