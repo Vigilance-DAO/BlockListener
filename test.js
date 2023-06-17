@@ -7,6 +7,8 @@ const provider = new ethers.providers.JsonRpcProvider(
   "https://eth-mainnet.g.alchemy.com/v2/4xXf1FH27swhdk6hsQ1qMGqPZRfU59MN"
 );
 
+const PORT = process.env.PORT || 3000;
+
 const thirtyDaysAgo = new Date();
 thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 const endTime = Math.floor(thirtyDaysAgo.getTime() / 1000);
@@ -137,6 +139,6 @@ app.get("/address/:address", (req, res) => {
   );
 });
 
-app.listen(3000, () => {
+app.listen(PORT, () => {
   console.log("server started");
 });
