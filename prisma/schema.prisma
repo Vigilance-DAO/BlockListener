@@ -11,8 +11,9 @@ datasource db {
 }
 
 model ContractAddresses {
-  id           Int       @id @default(autoincrement())
+  id           Int        @id @default(autoincrement())
   address       String    @unique
+  drainedAccounts Int     @default(0)
   InteractedAddresses InteractedAddresses[]
 }
 
