@@ -3,10 +3,9 @@ const { PrismaClient } = require("@prisma/client");
 const express = require("express");
 const app = express();
 const prisma = new PrismaClient();
+const { ETHEREUM_RPC_URL } = require("./constants");
 
-const provider = new ethers.providers.JsonRpcProvider(
-  "https://eth-mainnet.g.alchemy.com/v2/4xXf1FH27swhdk6hsQ1qMGqPZRfU59MN"
-);
+const provider = new ethers.providers.JsonRpcProvider(ETHEREUM_RPC_URL);
 const retryDelay = 10000;
 
 const date = new Date();
@@ -16,6 +15,8 @@ const endTime = Math.floor(date.getTime() / 1000);
 console.log(endTime);
 
 async function storeData(to, from, timestamp) {
+  if (to == null || from == null || timestamp == null) return;
+
   var address = await prisma.ContractAddresses.findUnique({
     where: { address: to.toLowerCase() },
   });
@@ -46,7 +47,10 @@ async function fetchDataWithRetry(tx, timeStamp) {
   while (retries < maxRetries) {
     try {
       const receipt = await provider.getTransactionReceipt(tx);
-      if (receipt == null) continue;
+      if (receipt == null) return;
+
+      const code = await provider.getCode(receipt.to);
+      if (code == "0x") return;
 
       await storeData(receipt.to, receipt.from, timeStamp);
       break;
