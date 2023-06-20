@@ -57,12 +57,48 @@ const top10Token = [
   },
 ];
 
+function changetokenValue(name, startingBalance, endingBalance, obj) {
+  var netChange;
+  if (obj[name] == undefined) {
+    if (startingBalance != 0) {
+      netChange = ((endingBalance - startingBalance) / startingBalance) * 100;
+    } else {
+      netChange = 0;
+    }
+
+    obj[name] = {
+      initialValue: startingBalance,
+      diffvalue: endingBalance - startingBalance,
+      netChange: netChange,
+    };
+  } else {
+    const initialValue = obj[name]["initialValue"] + startingBalance;
+    const diffvalue = obj[name]["diffvalue"] + endingBalance - startingBalance;
+
+    if (initialValue != 0) {
+      netChange = (diffvalue / initialValue) * 100;
+    } else {
+      netChange = 0;
+    }
+
+    obj[name] = {
+      initialValue: initialValue,
+      diffvalue: diffvalue,
+      netChange: netChange,
+    };
+  }
+  return obj;
+}
+
 async function drainedAccounts() {
   const prismadata = await prisma.InteractedAddresses.findMany({
     where: {
       id: {
         gt: id,
       },
+    },
+    orderBy: {
+      id: "asc",
     },
   });
 
@@ -71,9 +107,16 @@ async function drainedAccounts() {
     var address = prismadata[i].address;
     var timestamp = prismadata[i].timestamp;
     var contractAddressId = prismadata[i].contractAddressId;
-    var changedValue = "";
 
-    let startBlock = (await dater.getDate(timestamp * 1000, true)).block;
+    const contract = await prisma.contractAddresses.findUnique({
+      where: { id: contractAddressId },
+    });
+
+    const value = contract.tokenValue;
+    var obj = JSON.parse(value);
+    console.log(obj);
+
+    let startBlock = (await dater.getDate(timestamp * 1000)).block;
     let endBlock = (await dater.getDate((timestamp + 10 * 60) * 1000)).block;
 
     try {
@@ -86,17 +129,10 @@ async function drainedAccounts() {
         parseInt(endBlock)
       );
 
-      startingBalance = startingBalance._hex;
-      endingBalance = endingBalance._hex;
+      startingBalance = parseInt(startingBalance._hex);
+      endingBalance = parseInt(endingBalance._hex);
 
-      if (startingBalance != 0) {
-        const netPercentageChange = (
-          ((endingBalance - startingBalance) / startingBalance) *
-          100
-        ).toFixed(2);
-
-        changedValue += `ETH: ${netPercentageChange}% `;
-      }
+      obj = changetokenValue("ETH", startingBalance, endingBalance, obj);
     } catch (err) {
       console.log(err);
     }
@@ -117,28 +153,27 @@ async function drainedAccounts() {
           blockTag: parseInt(endBlock),
         });
 
-        startingBalance = ethers.BigNumber.from(startingBalance);
-        endingBalance = ethers.BigNumber.from(endingBalance);
+        startingBalance = parseInt(ethers.BigNumber.from(startingBalance));
+        endingBalance = parseInt(ethers.BigNumber.from(endingBalance));
 
-        if (startingBalance != 0) {
-          const netPercentageChange = (
-            ((endingBalance - startingBalance) / startingBalance) *
-            100
-          ).toFixed(2);
-
-          changedValue += `${top10Token[j].name}: ${netPercentageChange}% `;
-        }
+        obj = changetokenValue(
+          top10Token[j].name,
+          startingBalance,
+          endingBalance,
+          obj
+        );
       } catch (err) {
         console.log(err);
       }
     }
 
-    if (changedValue != "") {
-      await prisma.InteractedAddresses.update({
-        where: { id: id },
-        data: { changedValue: changedValue },
-      });
-    }
+    const tokenValue = JSON.stringify(obj);
+    console.log(tokenValue);
+
+    await prisma.contractAddresses.update({
+      where: { id: contractAddressId },
+      data: { tokenValue: tokenValue },
+    });
   }
   setTimeout(drainedAccounts, 30 * 60 * 1000);
 }
@@ -148,12 +183,23 @@ drainedAccounts();
 app.get("/address/:address", async (req, res) => {
   const address = req.params.address;
 
-  const addressData = await prisma.ContractAddresses.findUnique({
+  const addressData = await prisma.contractAddresses.findUnique({
     where: { address: address.toLowerCase() },
-    include: { InteractedAddresses: true },
   });
 
-  res.send(addressData);
+  const tokenValue = JSON.parse(addressData.tokenValue);
+
+  for (var key in tokenValue) {
+    tokenValue[key] = tokenValue[key]["netChange"];
+  }
+
+  const response = {
+    address: address,
+    creationDate: addressData.creationDate,
+    tokenValue: tokenValue,
+  };
+
+  res.send(response);
 });
 
 app.listen(3000, () => {
