@@ -10,6 +10,7 @@ const provider = new ethers.providers.JsonRpcProvider(ETHEREUM_RPC_URL);
 
 const dater = new EthDater(provider);
 var id = -1;
+const retryDelay = 10000;
 
 let abi = ["function balanceOf(address account)"];
 let iface = new ethers.utils.Interface(abi);
@@ -115,68 +116,86 @@ async function drainedAccounts() {
     const value = contract.tokenValue;
     var obj = JSON.parse(value);
 
-    let startBlock = (await dater.getDate(timestamp * 1000)).block;
-    let endBlock = (await dater.getDate((timestamp + 10 * 60) * 1000)).block;
+    let retries = 0;
+    const maxRetries = 3;
+    let startBlock, endBlock;
+    while (retries < maxRetries) {
+      try {
+        startBlock = (await dater.getDate(timestamp * 1000)).block;
+        endBlock = (await dater.getDate((timestamp + 10 * 60) * 1000)).block;
 
-    try {
-      var startingBalance = await provider.getBalance(
-        address,
-        parseInt(startBlock)
-      );
-      var endingBalance = await provider.getBalance(
-        address,
-        parseInt(endBlock)
-      );
+        var startingBalance = await provider.getBalance(
+          address,
+          parseInt(startBlock)
+        );
+        var endingBalance = await provider.getBalance(
+          address,
+          parseInt(endBlock)
+        );
 
-      startingBalance = parseInt(startingBalance._hex);
-      endingBalance = parseInt(endingBalance._hex);
+        startingBalance = parseInt(startingBalance._hex);
+        endingBalance = parseInt(endingBalance._hex);
 
-      obj = changetokenValue("ETH", startingBalance, endingBalance, obj);
-    } catch (err) {
-      console.log(err);
+        obj = changetokenValue("ETH", startingBalance, endingBalance, obj);
+        break;
+      } catch (err) {
+        console.log(err);
+        retries++;
+        await delay(retryDelay);
+      }
     }
 
     let callData = iface.encodeFunctionData("balanceOf", [address]);
 
     for (var j = 0; j < top10Token.length; j++) {
-      try {
-        var startingBalance = await provider.call({
-          to: top10Token[j].address,
-          data: callData,
-          blockTag: parseInt(startBlock),
-        });
+      retries = 0;
+      while (retries < maxRetries) {
+        try {
+          var startingBalance = await provider.call({
+            to: top10Token[j].address,
+            data: callData,
+            blockTag: parseInt(startBlock),
+          });
 
-        var endingBalance = await provider.call({
-          to: top10Token[j].address,
-          data: callData,
-          blockTag: parseInt(endBlock),
-        });
+          var endingBalance = await provider.call({
+            to: top10Token[j].address,
+            data: callData,
+            blockTag: parseInt(endBlock),
+          });
 
-        startingBalance = parseInt(ethers.BigNumber.from(startingBalance));
-        endingBalance = parseInt(ethers.BigNumber.from(endingBalance));
+          startingBalance = parseInt(ethers.BigNumber.from(startingBalance));
+          endingBalance = parseInt(ethers.BigNumber.from(endingBalance));
 
-        obj = changetokenValue(
-          top10Token[j].name,
-          startingBalance,
-          endingBalance,
-          obj
-        );
-      } catch (err) {
-        console.log(err);
+          obj = changetokenValue(
+            top10Token[j].name,
+            startingBalance,
+            endingBalance,
+            obj
+          );
+          break;
+        } catch (err) {
+          console.log(err);
+          retries++;
+          await delay(retryDelay);
+        }
       }
     }
 
     const tokenValue = JSON.stringify(obj);
 
-    // await prisma.contractAddresses.update({
-    //   where: { id: contractAddressId },
-    //   data: { tokenValue: tokenValue },
-    // });
+    await prisma.contractAddresses.update({
+      where: { id: contractAddressId },
+      data: { tokenValue: tokenValue },
+    });
   }
   setTimeout(drainedAccounts, 30 * 60 * 1000);
 }
 
 drainedAccounts();
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 app.get("/address/:address", async (req, res) => {
   const address = req.params.address;
@@ -212,6 +231,6 @@ app.get("/address/:address", async (req, res) => {
   res.send(response);
 });
 
-app.listen(3000, () => {
+app.listen(4000, () => {
   console.log("Server is running on port 3000.");
 });

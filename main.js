@@ -49,9 +49,6 @@ async function fetchDataWithRetry(tx, timeStamp) {
       const receipt = await provider.getTransactionReceipt(tx);
       if (receipt == null) return;
 
-      const code = await provider.getCode(receipt.to);
-      if (code == "0x") return;
-
       await storeData(receipt.to, receipt.from, timeStamp);
       break;
     } catch (error) {
@@ -89,7 +86,8 @@ async function listenForNewBlock() {
 }
 
 async function main() {
-  const latestBlock = await provider.getBlockNumber();
+  // const latestBlock = await provider.getBlockNumber();
+  const latestBlock = 16922046
 
   for (var i = latestBlock; i > 0; i--) {
     let block;
