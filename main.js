@@ -9,7 +9,7 @@ const provider = new ethers.providers.JsonRpcProvider(ETHEREUM_RPC_URL);
 const retryDelay = 10000;
 
 const date = new Date();
-date.setDate(date.getDate() - 1);
+date.setDate(date.getDate() - 89);
 
 const endTime = Math.floor(date.getTime() / 1000);
 console.log(endTime);

@@ -114,7 +114,6 @@ async function drainedAccounts() {
 
     const value = contract.tokenValue;
     var obj = JSON.parse(value);
-    console.log(obj);
 
     let startBlock = (await dater.getDate(timestamp * 1000)).block;
     let endBlock = (await dater.getDate((timestamp + 10 * 60) * 1000)).block;
@@ -168,12 +167,11 @@ async function drainedAccounts() {
     }
 
     const tokenValue = JSON.stringify(obj);
-    console.log(tokenValue);
 
-    await prisma.contractAddresses.update({
-      where: { id: contractAddressId },
-      data: { tokenValue: tokenValue },
-    });
+    // await prisma.contractAddresses.update({
+    //   where: { id: contractAddressId },
+    //   data: { tokenValue: tokenValue },
+    // });
   }
   setTimeout(drainedAccounts, 30 * 60 * 1000);
 }
@@ -185,17 +183,29 @@ app.get("/address/:address", async (req, res) => {
 
   const addressData = await prisma.contractAddresses.findUnique({
     where: { address: address.toLowerCase() },
+    include: { InteractedAddresses: true },
   });
 
+  if (addressData == null) {
+    res.sendStatus(404);
+    return;
+  }
   const tokenValue = JSON.parse(addressData.tokenValue);
+  const interactedAddresses = addressData.InteractedAddresses;
 
   for (var key in tokenValue) {
     tokenValue[key] = tokenValue[key]["netChange"];
   }
 
+  const uniqueUsers = new Set();
+  interactedAddresses.forEach((element) => {
+    uniqueUsers.add(element.address);
+  });
+
   const response = {
     address: address,
     creationDate: addressData.creationDate,
+    userCount: uniqueUsers.size,
     tokenValue: tokenValue,
   };
 
