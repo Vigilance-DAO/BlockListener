@@ -25,3 +25,11 @@ model InteractedAddresses {
   contractAddressId Int 
   ContractAddresses ContractAddresses @relation(fields: [contractAddressId], references: [id])
 }
+
+model Transactions {
+  transactionHash String    @id
+  blockNumber     Int
+  timeStamp       Int
+  from            String
+  to              String
+}

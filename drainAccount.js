@@ -121,7 +121,7 @@ async function drainedAccounts() {
     let startBlock, endBlock;
     while (retries < maxRetries) {
       try {
-        startBlock = (await dater.getDate(timestamp * 1000)).block;
+        startBlock = (await dater.getDate(timestamp * 1000, false)).block;
         endBlock = (await dater.getDate((timestamp + 10 * 60) * 1000)).block;
 
         var startingBalance = await provider.getBalance(
@@ -183,10 +183,10 @@ async function drainedAccounts() {
 
     const tokenValue = JSON.stringify(obj);
 
-    await prisma.contractAddresses.update({
-      where: { id: contractAddressId },
-      data: { tokenValue: tokenValue },
-    });
+    // await prisma.contractAddresses.update({
+    //   where: { id: contractAddressId },
+    //   data: { tokenValue: tokenValue },
+    // });
   }
   setTimeout(drainedAccounts, 30 * 60 * 1000);
 }
