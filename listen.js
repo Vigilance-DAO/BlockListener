@@ -51,7 +51,7 @@ async function listenForNewBlock(url, network) {
     let block;
     let retries = 0;
     const maxRetries = 3;
-    console.log('block', blockNumber)
+    console.log(`${network} block`, blockNumber)
     while (retries < maxRetries) {
       try {
         block = await provider.getBlock(blockNumber);
@@ -66,7 +66,7 @@ async function listenForNewBlock(url, network) {
     if (block) {
       let data = []
       let promises = []
-      console.log('totalTx:', block.transactions.length)
+      console.log(`${network} totalTx:`, block.transactions.length)
       for (const tx of block.transactions) {
         promises.push(fetchDataWithRetry(tx, block.timestamp, provider));
       }
@@ -74,8 +74,8 @@ async function listenForNewBlock(url, network) {
       _data.map(item => {
 	      if (item) data.push({...item, network});
       })
-      console.log('processed tx:', data.length, blockNumber)
-      console.log(await prisma.Transactions.createMany({data}));
+      console.log(`${network} processed tx:`, data.length, blockNumber)
+      console.log(network, await prisma.Transactions.createMany({data}));
     }
     } catch(err) {
        console.log('error processing block', err, blockNumber)
