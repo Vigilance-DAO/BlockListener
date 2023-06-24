@@ -32,4 +32,5 @@ model Transactions {
   timeStamp       Int
   from            String
   to              String
+  network String @default("ETHEREUM_MAINNET")
 }
