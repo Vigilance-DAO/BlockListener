@@ -15,15 +15,6 @@ model ContractAddresses {
   address        String     @unique
   creationDate   String     @default("NA")
   tokenValue          String     @default("{}")
-  InteractedAddresses InteractedAddresses[]
-}
-
-model InteractedAddresses {
-  id             Int       @id @default(autoincrement())
-  address        String    
-  timestamp      Int
-  contractAddressId Int 
-  ContractAddresses ContractAddresses @relation(fields: [contractAddressId], references: [id])
 }
 
 model Transactions {
