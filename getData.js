@@ -9,9 +9,12 @@ const app = express();
 const provider = new ethers.providers.JsonRpcProvider(ETHEREUM_RPC_URL);
 
 async function getCreationDate(address) {
-  var contract = await prisma.ContractAddresses.findUnique({
+  var contract = await prisma.ContractAddresses.findFirst({
     where: {
-      address: address,
+      address: {
+        equals: address,
+        mode: "insensitive",
+      },
     },
   });
 
@@ -43,7 +46,7 @@ async function getCreationDate(address) {
 
     await prisma.ContractAddresses.update({
       where: {
-        address: address,
+        address: contract.address,
       },
       data: {
         creationDate: date,
