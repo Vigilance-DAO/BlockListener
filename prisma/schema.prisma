@@ -14,11 +14,12 @@ model ContractAddresses {
   id             Int        @id @default(autoincrement())
   address        String     @unique
   creationDate   String     @default("NA")
-  tokenValue          String     @default("{}")
+  tokenValue     String     @default("{}")
 }
 
 model Transactions {
-  transactionHash String    @id
+  id              Int        @id @default(autoincrement())
+  transactionHash String    
   blockNumber     Int
   timeStamp       Int
   from            String

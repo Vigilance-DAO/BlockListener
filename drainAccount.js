@@ -4,8 +4,8 @@ const EthDater = require("ethereum-block-by-date");
 const express = require("express");
 const app = express();
 const prisma = new PrismaClient();
-const { ETHEREUM_RPC_URL } = require("./constants");
 
+const ETHEREUM_RPC_URL = process.env.ETHEREUM_RPC_URL;
 const provider = new ethers.providers.JsonRpcProvider(ETHEREUM_RPC_URL);
 
 const dater = new EthDater(provider);
@@ -17,45 +17,45 @@ let iface = new ethers.utils.Interface(abi);
 
 const top10Token = [
   {
-    address: "0x6b175474e89094c44da98b954eedeac495271d0f",
-    name: "DAI",
-  },
-  {
-    address: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
-    name: "WETH",
-  },
-  {
-    address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
-    name: "USDC",
-  },
-  {
     address: "0xdac17f958d2ee523a2206206994597c13d831ec7",
-    name: "USDT",
+    name: "USDT"
   },
   {
-    address: "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
-    name: "WBTC",
+    address: "0xB8c77482e45F1F44dE1745F52C74426C631bDD52",
+    name: "BNB"
   },
   {
-    address: "0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9",
-    name: "AAVE",
+    address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    name: "USDC"
   },
   {
-    address: "0x514910771af9ca656af840dff83e8264ecf986ca",
-    name: "LINK",
+    address: "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
+    name: "stETH"
   },
   {
-    address: "0x0bc529c00c6401aef6d220be8c6ea1667f6ad93e",
-    name: "YFI",
+    address: "0x50327c6c5a14DCaDE707ABad2E27eB517df87AB5",
+    name: "TRON"
   },
   {
-    address: "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
-    name: "UNI",
+    address: "0x7D1AfA7B718fb893dB30A3aBc0Cfc608AaCfeBB0",
+    name: "MATIC"
   },
   {
-    address: "0x57ab1ec28d129707052df4df418d58a2d46d5f51",
-    name: "SUSD",
+    address: "0x3883f5e181fccaF8410FA61e12b59BAd963fb645",
+    name: "THETA"
   },
+  {
+    address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+    name: "WBTC"
+  },
+  {
+    address: "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE",
+    name: "SHIB"
+  },
+  {
+    address: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+    name: "DAI"
+  }
 ];
 
 function changetokenValue(name, startingBalance, endingBalance, obj) {
@@ -92,7 +92,7 @@ function changetokenValue(name, startingBalance, endingBalance, obj) {
 }
 
 async function drainedAccounts() {
-  const prismadata = await prisma.InteractedAddresses.findMany({
+  const prismadata = await prisma.Transactions.findMany({
     where: {
       id: {
         gt: id,
@@ -105,31 +105,44 @@ async function drainedAccounts() {
 
   for (var i = 0; i < prismadata.length; i++) {
     id = prismadata[i].id;
-    var address = prismadata[i].address;
-    var timestamp = prismadata[i].timestamp;
-    var contractAddressId = prismadata[i].contractAddressId;
+    var from = prismadata[i].from;
+    var to = prismadata[i].to;
+    var timeStamp = prismadata[i].timeStamp;
+    var startBlock = parseInt(prismadata[i].blockNumber) - 1;
 
-    const contract = await prisma.contractAddresses.findUnique({
-      where: { id: contractAddressId },
+    var contract = await prisma.ContractAddresses.findFirst({
+      where: {
+        address: {
+          equals: to,
+          mode: "insensitive",
+        },
+      },
     });
+
+    if (contract == null) {
+      contract = await prisma.ContractAddresses.create({
+        data: {
+          address: to,
+        },
+      });
+    }
 
     const value = contract.tokenValue;
     var obj = JSON.parse(value);
 
     let retries = 0;
     const maxRetries = 3;
-    let startBlock, endBlock;
+    let endBlock;
     while (retries < maxRetries) {
       try {
-        startBlock = (await dater.getDate(timestamp * 1000, false)).block;
-        endBlock = (await dater.getDate((timestamp + 10 * 60) * 1000)).block;
+        endBlock = (await dater.getDate((timeStamp + 10 * 60) * 1000)).block;
 
         var startingBalance = await provider.getBalance(
-          address,
-          parseInt(startBlock)
+          from,
+          startBlock
         );
         var endingBalance = await provider.getBalance(
-          address,
+          from,
           parseInt(endBlock)
         );
 
@@ -145,7 +158,7 @@ async function drainedAccounts() {
       }
     }
 
-    let callData = iface.encodeFunctionData("balanceOf", [address]);
+    let callData = iface.encodeFunctionData("balanceOf", [from]);
 
     for (var j = 0; j < top10Token.length; j++) {
       retries = 0;
@@ -154,7 +167,7 @@ async function drainedAccounts() {
           var startingBalance = await provider.call({
             to: top10Token[j].address,
             data: callData,
-            blockTag: parseInt(startBlock),
+            blockTag: startBlock,
           });
 
           var endingBalance = await provider.call({
@@ -182,13 +195,20 @@ async function drainedAccounts() {
     }
 
     const tokenValue = JSON.stringify(obj);
-
-    // await prisma.contractAddresses.update({
-    //   where: { id: contractAddressId },
-    //   data: { tokenValue: tokenValue },
-    // });
+    console.log(tokenValue+"\n");
+    await prisma.ContractAddresses.updateMany({
+      where: {
+        address: {
+          equals: to,
+          mode: "insensitive",
+        }
+      },
+      data: {
+        tokenValue: tokenValue,
+      },
+    });
   }
-  setTimeout(drainedAccounts, 30 * 60 * 1000);
+  setTimeout(drainedAccounts, 10 * 60 * 1000);
 }
 
 drainedAccounts();
@@ -196,41 +216,3 @@ drainedAccounts();
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-
-app.get("/address/:address", async (req, res) => {
-  const address = req.params.address;
-
-  const addressData = await prisma.contractAddresses.findUnique({
-    where: { address: address.toLowerCase() },
-    include: { InteractedAddresses: true },
-  });
-
-  if (addressData == null) {
-    res.sendStatus(404);
-    return;
-  }
-  const tokenValue = JSON.parse(addressData.tokenValue);
-  const interactedAddresses = addressData.InteractedAddresses;
-
-  for (var key in tokenValue) {
-    tokenValue[key] = tokenValue[key]["netChange"];
-  }
-
-  const uniqueUsers = new Set();
-  interactedAddresses.forEach((element) => {
-    uniqueUsers.add(element.address);
-  });
-
-  const response = {
-    address: address,
-    creationDate: addressData.creationDate,
-    userCount: uniqueUsers.size,
-    tokenValue: tokenValue,
-  };
-
-  res.send(response);
-});
-
-app.listen(4000, () => {
-  console.log("Server is running on port 3000.");
-});

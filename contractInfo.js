@@ -2,9 +2,12 @@ const express = require("express");
 const ethers = require("ethers");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
-const { ETHERSCAN_API_KEY, ETHEREUM_RPC_URL } = require("./constants");
+require("dotenv").config();
 
 const app = express();
+
+const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY;
+const ETHEREUM_RPC_URL = process.env.ETHEREUM_RPC_URL;
 
 const provider = new ethers.providers.JsonRpcProvider(ETHEREUM_RPC_URL);
 
@@ -33,9 +36,9 @@ async function getCreationDate(address) {
     );
 
     const data = await response.json();
-
+      console.log(data);
     if (data.result == null) {
-      return "NA";
+      return date;
     }
 
     const txHash = data.result[0].txHash;
@@ -99,10 +102,26 @@ app.get("/address/:address", async (req, res) => {
   const userCount24hours = transactionsLast24Hours.length;
   const userCount30days = transactionsLast30Days.length;
 
+  const contract = await prisma.ContractAddresses.findFirst({
+    where: {
+      address: {
+        equals: address,
+        mode: "insensitive",
+      },
+    },
+  });
+
+  const tokenValue = JSON.parse(contract.tokenValue);
+
+  for (var key in tokenValue) {
+    tokenValue[key] = tokenValue[key]["netChange"];
+  }
+
   res.json({
     userCount24hours,
     userCount30days,
     creationDate: date,
+    tokenValue,
   });
 });
 
