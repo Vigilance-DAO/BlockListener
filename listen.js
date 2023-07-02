@@ -1,35 +1,35 @@
 const { ethers } = require("ethers");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
-const { ETHEREUM_RPC_URL } = require("./constants");
-
-const provider = new ethers.providers.JsonRpcProvider(ETHEREUM_RPC_URL);
+const { ETHEREUM_RPC_URL, POLYGON_RPC_URL } = require("./constants");
+//console.log(ETHEREUM_RPC_URL)
 const retryDelay = 10000;
 
 async function storeData(txHash, from, to, blockNumber, timeStamp) {
   if (to == null || from == null || txHash == null || blockNumber == null || timeStamp == null) return;
 
-  await prisma.Transactions.create({
-    data: {
+  //console.log(await prisma.Transactions.create({
+  return {
       transactionHash: txHash,
       blockNumber,
       timeStamp,
       from,
       to,
-    },
-  });
+    }
+  //}));
 }
 
-async function fetchDataWithRetry(tx, timeStamp) {
+async function fetchDataWithRetry(tx, timeStamp, provider) {
   let retries = 0;
   const maxRetries = 3;
 
   while (retries < maxRetries) {
     try {
       const receipt = await provider.getTransactionReceipt(tx);
+      // return receipt;
       if (receipt == null) return;
 
-      await storeData(tx, receipt.from, receipt.to, receipt.blockNumber, timeStamp);
+      return await storeData(tx, receipt.from, receipt.to, receipt.blockNumber, timeStamp);
       break;
     } catch (error) {
       console.error(error);
@@ -39,12 +39,19 @@ async function fetchDataWithRetry(tx, timeStamp) {
   }
 }
 
-async function listenForNewBlock() {
+async function listenForNewBlock(url, network) {
+  const provider = new ethers.providers.JsonRpcProvider(url);
+
+  provider.on("error", (tx) => {
+    // Emitted when any error occurs
+    console.log('error', tx)
+  });
   provider.on("block", async (blockNumber) => {
+    try {
     let block;
     let retries = 0;
     const maxRetries = 3;
-
+    console.log(`${network} block`, blockNumber)
     while (retries < maxRetries) {
       try {
         block = await provider.getBlock(blockNumber);
@@ -57,9 +64,21 @@ async function listenForNewBlock() {
     }
 
     if (block) {
+      let data = []
+      let promises = []
+      console.log(`${network} totalTx:`, block.transactions.length)
       for (const tx of block.transactions) {
-        await fetchDataWithRetry(tx, block.timestamp);
+        promises.push(fetchDataWithRetry(tx, block.timestamp, provider));
       }
+      let _data = await Promise.all(promises);
+      _data.map(item => {
+	      if (item) data.push({...item, network});
+      })
+      console.log(`${network} processed tx:`, data.length, blockNumber)
+      console.log(network, await prisma.Transactions.createMany({data}));
+    }
+    } catch(err) {
+       console.log('error processing block', err, blockNumber)
     }
   });
 }
@@ -68,4 +87,5 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-listenForNewBlock();
+listenForNewBlock(ETHEREUM_RPC_URL, "ETHEREUM_MAINNET").catch(err => console.error(err));
+listenForNewBlock(POLYGON_RPC_URL, "POLYGON_MAINNET").catch(err => console.error(err));
