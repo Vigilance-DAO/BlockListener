@@ -12,11 +12,11 @@ datasource db {
 
 model ContractAddresses {
   id             Int        @id @default(autoincrement())
-  name          String?
+  name           String?
   address        String     @unique
   creationDate   String     @default("NA")
-  tokenValue          String     @default("{}")
-  network String @default("ETHEREUM_MAINNET")
+  tokenValue     String     @default("{}")
+  network        String     @default("ETHEREUM_MAINNET")
 }
 
 model Transactions {
@@ -26,5 +26,14 @@ model Transactions {
   timeStamp       Int
   from            String
   to              String
-  network String @default("ETHEREUM_MAINNET")
+  network         String      @default("ETHEREUM_MAINNET")
+}
+
+model TransactionCount {
+  id              Int        @id @default(autoincrement())
+  from            String
+  to              String
+  count           Int
+  time            Int
+  network         String     @default("ETHEREUM_MAINNET")
 }
