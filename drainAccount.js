@@ -18,44 +18,44 @@ let iface = new ethers.utils.Interface(abi);
 const top10Token = [
   {
     address: "0xdac17f958d2ee523a2206206994597c13d831ec7",
-    name: "USDT"
+    name: "USDT",
   },
   {
     address: "0xB8c77482e45F1F44dE1745F52C74426C631bDD52",
-    name: "BNB"
+    name: "BNB",
   },
   {
     address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-    name: "USDC"
+    name: "USDC",
   },
   {
     address: "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
-    name: "stETH"
+    name: "stETH",
   },
   {
     address: "0x50327c6c5a14DCaDE707ABad2E27eB517df87AB5",
-    name: "TRON"
+    name: "TRON",
   },
   {
     address: "0x7D1AfA7B718fb893dB30A3aBc0Cfc608AaCfeBB0",
-    name: "MATIC"
+    name: "MATIC",
   },
   {
     address: "0x3883f5e181fccaF8410FA61e12b59BAd963fb645",
-    name: "THETA"
+    name: "THETA",
   },
   {
     address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
-    name: "WBTC"
+    name: "WBTC",
   },
   {
     address: "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE",
-    name: "SHIB"
+    name: "SHIB",
   },
   {
     address: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
-    name: "DAI"
-  }
+    name: "DAI",
+  },
 ];
 
 function changetokenValue(name, startingBalance, endingBalance, obj) {
@@ -92,25 +92,25 @@ function changetokenValue(name, startingBalance, endingBalance, obj) {
 }
 
 async function drainedAccounts() {
-  const prismadata = await prisma.Transactions.findMany({
+  const batchSize = 100;
+  const transactions = await prisma.Transactions.findMany({
     where: {
-      id: {
-        gt: id,
-      },
+      id: { gt: id },
     },
     orderBy: {
       id: "asc",
     },
+    take: batchSize,
   });
 
-  for (var i = 0; i < prismadata.length; i++) {
-    id = prismadata[i].id;
-    var from = prismadata[i].from;
-    var to = prismadata[i].to;
-    var timeStamp = prismadata[i].timeStamp;
-    var startBlock = parseInt(prismadata[i].blockNumber) - 1;
+  const tokenUpdate = [];
 
-    var contract = await prisma.ContractAddresses.findFirst({
+  for (const transaction of transactions) {
+    id = transaction.id;
+    const { from, to, timeStamp, blockNumber } = transaction;
+    const startBlock = parseInt(blockNumber) - 1;
+
+    let contract = await prisma.ContractAddresses.findFirst({
       where: {
         address: {
           equals: to,
@@ -127,29 +127,31 @@ async function drainedAccounts() {
       });
     }
 
-    const value = contract.tokenValue;
-    var obj = JSON.parse(value);
+    let obj = JSON.parse(contract.tokenValue);
+    const value = obj.ETH;
 
     let retries = 0;
     const maxRetries = 3;
     let endBlock;
+
     while (retries < maxRetries) {
       try {
         endBlock = (await dater.getDate((timeStamp + 10 * 60) * 1000)).block;
 
-        var startingBalance = await provider.getBalance(
-          from,
-          startBlock
-        );
-        var endingBalance = await provider.getBalance(
-          from,
-          parseInt(endBlock)
-        );
+        const [startingBalance, endingBalance] = await Promise.all([
+          provider.getBalance(from, startBlock),
+          provider.getBalance(from, parseInt(endBlock)),
+        ]);
 
-        startingBalance = parseInt(startingBalance._hex);
-        endingBalance = parseInt(endingBalance._hex);
+        const startingBalanceInt = parseInt(startingBalance._hex);
+        const endingBalanceInt = parseInt(endingBalance._hex);
 
-        obj = changetokenValue("ETH", startingBalance, endingBalance, obj);
+        obj = changetokenValue(
+          "ETH",
+          startingBalanceInt,
+          endingBalanceInt,
+          obj
+        );
         break;
       } catch (err) {
         console.log(err);
@@ -158,31 +160,36 @@ async function drainedAccounts() {
       }
     }
 
-    let callData = iface.encodeFunctionData("balanceOf", [from]);
+    const callData = iface.encodeFunctionData("balanceOf", [from]);
 
-    for (var j = 0; j < top10Token.length; j++) {
+    const tokenPromises = top10Token.map(async (token) => {
       retries = 0;
       while (retries < maxRetries) {
         try {
-          var startingBalance = await provider.call({
-            to: top10Token[j].address,
-            data: callData,
-            blockTag: startBlock,
-          });
+          const [startingBalance, endingBalance] = await Promise.all([
+            provider.call({
+              to: token.address,
+              data: callData,
+              blockTag: startBlock,
+            }),
+            provider.call({
+              to: token.address,
+              data: callData,
+              blockTag: parseInt(endBlock),
+            }),
+          ]);
 
-          var endingBalance = await provider.call({
-            to: top10Token[j].address,
-            data: callData,
-            blockTag: parseInt(endBlock),
-          });
-
-          startingBalance = parseInt(ethers.BigNumber.from(startingBalance));
-          endingBalance = parseInt(ethers.BigNumber.from(endingBalance));
+          const startingBalanceInt = parseInt(
+            ethers.BigNumber.from(startingBalance)
+          );
+          const endingBalanceInt = parseInt(
+            ethers.BigNumber.from(endingBalance)
+          );
 
           obj = changetokenValue(
-            top10Token[j].name,
-            startingBalance,
-            endingBalance,
+            token.name,
+            startingBalanceInt,
+            endingBalanceInt,
             obj
           );
           break;
@@ -192,23 +199,39 @@ async function drainedAccounts() {
           await delay(retryDelay);
         }
       }
-    }
+    });
+
+    await Promise.all(tokenPromises);
 
     const tokenValue = JSON.stringify(obj);
-    console.log(tokenValue+"\n");
-    await prisma.ContractAddresses.updateMany({
-      where: {
-        address: {
-          equals: to,
-          mode: "insensitive",
-        }
-      },
-      data: {
-        tokenValue: tokenValue,
-      },
+    console.log(id);
+    // console.log(tokenValue + "\n");
+
+    tokenUpdate.push({
+      to,
+      tokenValue,
     });
   }
-  setTimeout(drainedAccounts, 10 * 60 * 1000);
+
+  tokenUpdate.forEach(async (update) => {
+    try {
+      await prisma.ContractAddresses.updateMany({
+        where: {
+          address: {
+            equals: update.to,
+            mode: "insensitive",
+          },
+        },
+        data: {
+          tokenValue: update.tokenValue,
+        },
+      });
+    } catch (error) {
+      console.log(error);
+    }
+  });
+
+  setTimeout(drainedAccounts, 1 * 60 * 1000);
 }
 
 drainedAccounts();
