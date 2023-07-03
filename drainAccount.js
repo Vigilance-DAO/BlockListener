@@ -4,59 +4,20 @@ const EthDater = require("ethereum-block-by-date");
 const express = require("express");
 const app = express();
 const prisma = new PrismaClient();
+const { top10Token_ETHEREUM, top10Token_POLYGON } = require("./constant");
 
 const ETHEREUM_RPC_URL = process.env.ETHEREUM_RPC_URL;
-const provider = new ethers.providers.JsonRpcProvider(ETHEREUM_RPC_URL);
+const ETHEREUM_provider = new ethers.providers.JsonRpcProvider(
+  ETHEREUM_RPC_URL
+);
+const POLYGON_RPC_URL = process.env.POLYGON_RPC_URL;
+const POLYGON_provider = new ethers.providers.JsonRpcProvider(POLYGON_RPC_URL);
 
-const dater = new EthDater(provider);
 var id = -1;
 const retryDelay = 10000;
 
 let abi = ["function balanceOf(address account)"];
 let iface = new ethers.utils.Interface(abi);
-
-const top10Token = [
-  {
-    address: "0xdac17f958d2ee523a2206206994597c13d831ec7",
-    name: "USDT",
-  },
-  {
-    address: "0xB8c77482e45F1F44dE1745F52C74426C631bDD52",
-    name: "BNB",
-  },
-  {
-    address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-    name: "USDC",
-  },
-  {
-    address: "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
-    name: "stETH",
-  },
-  {
-    address: "0x50327c6c5a14DCaDE707ABad2E27eB517df87AB5",
-    name: "TRON",
-  },
-  {
-    address: "0x7D1AfA7B718fb893dB30A3aBc0Cfc608AaCfeBB0",
-    name: "MATIC",
-  },
-  {
-    address: "0x3883f5e181fccaF8410FA61e12b59BAd963fb645",
-    name: "THETA",
-  },
-  {
-    address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
-    name: "WBTC",
-  },
-  {
-    address: "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE",
-    name: "SHIB",
-  },
-  {
-    address: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
-    name: "DAI",
-  },
-];
 
 function changetokenValue(name, startingBalance, endingBalance, obj) {
   var netChange;
@@ -91,11 +52,12 @@ function changetokenValue(name, startingBalance, endingBalance, obj) {
   return obj;
 }
 
-async function drainedAccounts() {
+async function drainedAccounts(network, provider, top10Token) {
   const batchSize = 100;
   const transactions = await prisma.Transactions.findMany({
     where: {
       id: { gt: id },
+      network: network,
     },
     orderBy: {
       id: "asc",
@@ -116,6 +78,7 @@ async function drainedAccounts() {
           equals: to,
           mode: "insensitive",
         },
+        network: network,
       },
     });
 
@@ -123,16 +86,17 @@ async function drainedAccounts() {
       contract = await prisma.ContractAddresses.create({
         data: {
           address: to,
+          network: network,
         },
       });
     }
 
     let obj = JSON.parse(contract.tokenValue);
-    const value = obj.ETH;
 
     let retries = 0;
     const maxRetries = 3;
     let endBlock;
+    const dater = new EthDater(provider);
 
     while (retries < maxRetries) {
       try {
@@ -205,7 +169,7 @@ async function drainedAccounts() {
 
     const tokenValue = JSON.stringify(obj);
     console.log(id);
-    // console.log(tokenValue + "\n");
+    console.log(tokenValue + "\n");
 
     tokenUpdate.push({
       to,
@@ -221,6 +185,7 @@ async function drainedAccounts() {
             equals: update.to,
             mode: "insensitive",
           },
+          network: network,
         },
         data: {
           tokenValue: update.tokenValue,
@@ -234,7 +199,8 @@ async function drainedAccounts() {
   setTimeout(drainedAccounts, 1 * 60 * 1000);
 }
 
-drainedAccounts();
+drainedAccounts("ETHEREUM_MAINNET", ETHEREUM_provider, top10Token_ETHEREUM);
+// drainedAccounts("POLYGON_MAINNET", POLYGON_provider, top10Token_POLYGON);
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
