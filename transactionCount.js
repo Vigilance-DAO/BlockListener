@@ -2,17 +2,29 @@ const ethers = require("ethers");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
-const timePeriod = 1000 * 60 * 60 * 3;
+const timePeriod = 60 * 60 * 3; //3 hours
 
 async function transactionCount(network) {
   const currTime = Math.floor(new Date().getTime() / 1000);
   const period = currTime - timePeriod;
 
   const fromAddresses = await prisma.Transactions.findMany({
+    where: {
+      timeStamp: {
+        gte: period,
+      },
+      network: network,
+    },
     distinct: ["from"],
   });
 
   const toAddresses = await prisma.Transactions.findMany({
+    where: {
+      timeStamp: {
+        gte: period,
+      },
+      network: network,
+    },
     distinct: ["to"],
   });
 
