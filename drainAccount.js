@@ -7,13 +7,8 @@ const prisma = new PrismaClient();
 const { top10Token_ETHEREUM, top10Token_POLYGON } = require("./constant");
 
 const ETHEREUM_RPC_URL = process.env.ETHEREUM_RPC_URL;
-const ETHEREUM_provider = new ethers.providers.JsonRpcProvider(
-  ETHEREUM_RPC_URL
-);
 const POLYGON_RPC_URL = process.env.POLYGON_RPC_URL;
-const POLYGON_provider = new ethers.providers.JsonRpcProvider(POLYGON_RPC_URL);
 
-var id = -1;
 const retryDelay = 10000;
 
 let abi = ["function balanceOf(address account)"];
@@ -52,7 +47,10 @@ function changetokenValue(name, startingBalance, endingBalance, obj) {
   return obj;
 }
 
-async function drainedAccounts(network, provider, top10Token) {
+async function drainedAccounts(network, url, top10Token, id) {
+  const provider = new ethers.providers.JsonRpcProvider(url);
+  const dater = new EthDater(provider);
+
   const batchSize = 100;
   const transactions = await prisma.Transactions.findMany({
     where: {
@@ -96,7 +94,6 @@ async function drainedAccounts(network, provider, top10Token) {
     let retries = 0;
     const maxRetries = 3;
     let endBlock;
-    const dater = new EthDater(provider);
 
     while (retries < maxRetries) {
       try {
@@ -169,7 +166,7 @@ async function drainedAccounts(network, provider, top10Token) {
 
     const tokenValue = JSON.stringify(obj);
     console.log(id);
-    console.log(tokenValue + "\n");
+    // console.log(tokenValue + "\n");
 
     tokenUpdate.push({
       to,
@@ -196,11 +193,13 @@ async function drainedAccounts(network, provider, top10Token) {
     }
   });
 
-  setTimeout(drainedAccounts, 1 * 60 * 1000);
+  setTimeout(function() {
+    drainedAccounts(network, url, top10Token, id);
+  }, 1 * 60 * 1000);
 }
 
-drainedAccounts("ETHEREUM_MAINNET", ETHEREUM_provider, top10Token_ETHEREUM);
-// drainedAccounts("POLYGON_MAINNET", POLYGON_provider, top10Token_POLYGON);
+drainedAccounts("ETHEREUM_MAINNET", ETHEREUM_RPC_URL, top10Token_ETHEREUM, -1);
+drainedAccounts("POLYGON_MAINNET", POLYGON_RPC_URL, top10Token_POLYGON, -1);
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));

@@ -42,27 +42,7 @@ async function transactionCount(network) {
       });
 
       if (count != 0) {
-        const transaction = await prisma.TransactionCount.findFirst({
-          where: {
-            from: fromAddresses[i].from,
-            to: toAddresses[j].to,
-            network: network,
-          },
-        });
-
-        if (transaction) {
-          await prisma.TransactionCount.update({
-            where: {
-              id: transaction.id,
-            },
-            data: {
-              count: {
-                increment: count,
-              },
-              time: currTime,
-            },
-          });
-        } else {
+        try {
           await prisma.TransactionCount.create({
             data: {
               from: fromAddresses[i].from,
@@ -72,11 +52,16 @@ async function transactionCount(network) {
               time: currTime,
             },
           });
+        } catch (error) {
+          console.log(error);
         }
       }
     }
   }
-  setTimeout(transactionCount, timePeriod);
+  setTimeout(function() {
+    transactionCount(network);
+  }, timePeriod * 1000);
 }
+
 transactionCount("ETHEREUM_MAINNET");
-// transactionCount("POLYGON_MAINNET");
+transactionCount("POLYGON_MAINNET");
