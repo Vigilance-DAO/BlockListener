@@ -12,27 +12,28 @@ datasource db {
 
 model ContractAddresses {
   id             Int        @id @default(autoincrement())
-  name          String?
-  address        String     @unique
+  name           String?
+  address        String     
   creationDate   String     @default("NA")
-  tokenValue          String     @default("{}")
-  InteractedAddresses InteractedAddresses[]
-  network String @default("ETHEREUM_MAINNET")
-}
-
-model InteractedAddresses {
-  id             Int       @id @default(autoincrement())
-  address        String    
-  timestamp      Int
-  contractAddressId Int 
-  ContractAddresses ContractAddresses @relation(fields: [contractAddressId], references: [id])
+  tokenValue     String     @default("{}")
+  network        String     @default("ETHEREUM_MAINNET")
 }
 
 model Transactions {
-  transactionHash String    @id
+  id              Int        @id @default(autoincrement())
+  transactionHash String    
   blockNumber     Int
   timeStamp       Int
   from            String
   to              String
-  network String @default("ETHEREUM_MAINNET")
+  network         String      @default("ETHEREUM_MAINNET")
+}
+
+model TransactionCount {
+  id              Int        @id @default(autoincrement())
+  from            String
+  to              String
+  count           Int
+  time            Int
+  network         String     @default("ETHEREUM_MAINNET")
 }
