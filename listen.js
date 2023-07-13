@@ -9,7 +9,12 @@ const retryDelay = 10000;
 
 class DataSave {
   data = [];
-
+  savedCount = 0;
+  iters = 0;
+  network = null;
+  constructor(network) {
+    this.network = network;
+  }
   async start() {
     await this.saveData();
     await new Promise((resolve) => setTimeout(resolve, 10000));
@@ -20,15 +25,29 @@ class DataSave {
     this.data.push(item);
   }
 
+  logCounter() {
+    console.log(new Date(), `${this.network} Saved Count`, this.savedCount);
+    this.savedCount = 0;
+    if (this.iters < 20) {
+      this.iters++;
+      setTimeout(() => this.logCounter(), 10000);
+    } else {
+      this.iters++;
+      setTimeout(() => this.logCounter(), 60000 * 10);
+    }
+  }
+
   async saveData() {
     try {
       let _data = [...this.data];
       this.data = [];
-      if (_data.length > 0)
-        console.log('Saved data', await prisma.Transactions.createMany({
+      if (_data.length > 0) {
+        let saved = await prisma.Transactions.createMany({
           data: _data,
           skipDuplicates: true
-        }));
+        });
+        this.savedCount += saved.count;
+      }
     } catch (err) {
       console.error('Error Saving Data', err);
       sendMessage(`Error Saving Data:\n${new Date()}\n${err}`)
@@ -79,8 +98,9 @@ async function listenForNewBlock(urls, network) {
   blockBacklogCount[network] = 0;
   skippedBlocks[network] = 0;
   paused[network] = false;
-  let dataHandler = new DataSave();
+  let dataHandler = new DataSave(network);
   dataHandler.start();
+  dataHandler.logCounter();
 
   provider.on("error", (tx) => {
     // Emitted when any error occurs
@@ -92,13 +112,13 @@ async function listenForNewBlock(urls, network) {
       let block;
       let retries = 0;
       const maxRetries = 3;
-      console.log(`${network} block`, blockNumber)
-      console.log(`${network} backlog`, blockBacklogCount[network])
-      console.log(`${network} paused`, paused[network])
-      console.log(`${network} skipped`, skippedBlocks[network])
+      // console.log(`${network} block`, blockNumber)
+      // console.log(`${network} backlog`, blockBacklogCount[network])
+      // console.log(`${network} paused`, paused[network])
+      // console.log(`${network} skipped`, skippedBlocks[network])
       if (blockBacklogCount[network] > 50 || (paused[network] && blockBacklogCount[network] > 3)) {
         paused[network] = true;
-        console.log(`${network} backlog too high, skipping block`, blockNumber)
+        // console.log(`${network} backlog too high, skipping block`, blockNumber)
         blockBacklogCount[network]--;
         if (skippedBlocks[network] == 0) {
           sendMessage(`Backlog too high:\n${new Date()}\nNetwork: ${network}\nBlock: ${blockNumber}\nBacklog: ${blockBacklogCount[network]}`)
@@ -125,7 +145,7 @@ async function listenForNewBlock(urls, network) {
       if (block) {
         let data = []
         let promises = []
-        console.log(`${network} totalTx:`, block.transactions.length)
+        // console.log(`${network} totalTx:`, block.transactions.length)
         let count = 0;
         for (const tx of block.transactions) {
           let _provider = providers[count % providers.length];
@@ -136,7 +156,7 @@ async function listenForNewBlock(urls, network) {
         _data.map(item => {
           if (item) dataHandler.addItem({...item, network});
         })
-        console.log(`${network} processed tx:`, data.length, blockNumber)
+        // console.log(`${network} processed tx:`, data.length, blockNumber)
         // console.log(network, await prisma.Transactions.createMany({data}));
         blockBacklogCount[network]--;
       }

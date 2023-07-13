@@ -4,59 +4,19 @@ const EthDater = require("ethereum-block-by-date");
 require("dotenv").config();
 const prisma = new PrismaClient();
 const { top10Token_POLYGON } = require("./constant");
+const winston = require('winston');
+var fs = require('fs');
 
-const top100Contracts = [
-  {
-    address: "0xb54D6F958C3940db47ccfD65125a2A31D9FCb756",
-    tokenValue: "{}",
-    interactedAddresses: [],
-  },
-  {
-    address: "0x1278C74c3B2f8c3BcA0089b4E128fAf023615ECf",
-    tokenValue: "{}",
-    interactedAddresses: [],
-  },
-  {
-    address: "0xCd16dF514a501596a8E24fE1dC9c9be9c9091285",
-    tokenValue: "{}",
-    interactedAddresses: [],
-  },
-  {
-    address: "0xb6c02600D9956EDd226E87bB6F82cEa1ead8822F",
-    tokenValue: "{}",
-    interactedAddresses: [],
-  },
-  {
-    address: "0x704179beB09282EaEf98CA8aaa443C1E273eBBc2",
-    tokenValue: "{}",
-    interactedAddresses: [],
-  },
-  {
-    address: "0x0faf504bee22AF6E92D6697Af2EAfB9941a1712D",
-    tokenValue: "{}",
-    interactedAddresses: [],
-  },
-  {
-    address: "0xD4957F86CC075D769a77832d5ec3A375E247c45c",
-    tokenValue: "{}",
-    interactedAddresses: [],
-  },
-  {
-    address: "0xe2d792d64A36797f8d3E0F150B82d1E35Da76136",
-    tokenValue: "{}",
-    interactedAddresses: [],
-  },
-  {
-    address: "0xC3f16f2a1C4469F931148e88622A45bF60804b68",
-    tokenValue: "{}",
-    interactedAddresses: [],
-  },
-  {
-    address: "0xB2e3EEd25825E8c3946e403B8E8D943976E484E4",
-    tokenValue: "{}",
-    interactedAddresses: [],
-  },
-];
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.json(),
+  defaultMeta: { service: 'user-service' },
+  transports: [
+    new winston.transports.File({ filename: 'combined.log' }),
+  ],
+});
+
+const top100Contracts = [];
 
 const POLYGON_RPC_URL = process.env.POLYGON_RPC_URL;
 
@@ -98,6 +58,16 @@ function changetokenValue(name, startingBalance, endingBalance, obj) {
   return obj;
 }
 
+function getBlockTimeSeconds(network) {
+  if (network == 'POLYGON_MAINNET') {
+    return 2;
+  } else if (network == 'ETHEREUM_MAINNET') {
+    return 15;
+  } else {
+    throw new Error('Invalid network');
+  }
+}
+
 async function drainedAccounts(network, url, top10Token) {
   const currTime = 1688803871;
   const time2DaysAgo = 1688631070;
@@ -108,9 +78,9 @@ async function drainedAccounts(network, url, top10Token) {
 
   const transactions = await prisma.Transactions.findMany({
     where: {
-      to: {
-        in: top100Contracts.map((contract) => contract.address),
-      },
+      // to: {
+      //   in: top100Contracts.map((contract) => contract.address),
+      // },
       network: network,
       timeStamp: {
         gte: time2DaysAgo,
@@ -121,111 +91,203 @@ async function drainedAccounts(network, url, top10Token) {
   console.log(transactions.length);
   const tokenUpdate = [];
 
-  for (const transaction of transactions) {
-    const { from, to, timeStamp, blockNumber } = transaction;
-    const startBlock = parseInt(blockNumber) - 1;
-    count++;
-    console.log(count);
-    const index = top100Contracts.findIndex(
-      (contract) => contract.address == to
-    );
+  let intervalFile = setInterval(() => {
+    fs.writeFile('drain-analysis.json', JSON.stringify(top100Contracts), 'utf8', (callback) => {
+      console.log('file updated', callback)
+    });
+  }, 30000);
 
-    if (index == -1) {
-      continue;
-    }
+  let allPromises = [];
+  let completed = 0;
+  let _completed = {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0};
+  let pendingPromises = 0;
+  for (let i = 0; i< transactions.length; i++) {
+    let transaction = transactions[i];
+    async function analyse(transaction) {
+      const { from, to, timeStamp, blockNumber } = transaction;
+      const startBlock = parseInt(blockNumber) - 1;
+      count++;
+      console.log(count);
+      let myI = count;
+      let index = top100Contracts.findIndex(
+        (contract) => contract.address == to
+      );
 
-    if (!top100Contracts[index].interactedAddresses.includes(from)) {
-      if (top100Contracts[index].interactedAddresses.length == 100) {
-        continue;
+      if (index == -1) {
+        // completed++;
+        // _completed["1"]++;
+        // _completed["2"]++;
+        // _completed["3"]++;
+        // _completed["4"]++;
+        // _completed["5"]++;
+        // return;
+        top100Contracts.push({
+          address: to,
+          tokenValue: {},
+          interactedAddresses: [],
+        });
+        index = top100Contracts.length - 1;
       }
-      top100Contracts[index].interactedAddresses.push(from);
-    }
 
-    let obj = JSON.parse(top100Contracts[index].tokenValue);
-
-    let retries = 0;
-    const maxRetries = 3;
-    let endBlock;
-
-    while (retries < maxRetries) {
-      try {
-        endBlock = (await dater.getDate((timeStamp + 10 * 60) * 1000)).block;
-
-        const [startingBalance, endingBalance] = await Promise.all([
-          provider.getBalance(from, startBlock),
-          provider.getBalance(from, parseInt(endBlock)),
-        ]);
-
-        const startingBalanceInt = parseInt(startingBalance._hex);
-        const endingBalanceInt = parseInt(endingBalance._hex);
-
-        obj = changetokenValue(
-          "ETH",
-          startingBalanceInt,
-          endingBalanceInt,
-          obj
-        );
-        break;
-      } catch (err) {
-        console.log(err);
-        retries++;
-        await delay(retryDelay);
+      if (!top100Contracts[index].interactedAddresses.includes(from)) {
+        if (top100Contracts[index].interactedAddresses.length == 100) {
+          completed++;
+          _completed["1"]++;
+          _completed["2"]++;
+          _completed["3"]++;
+          _completed["4"]++;
+          _completed["5"]++;
+          return;
+        }
+        top100Contracts[index].interactedAddresses.push(from);
+      } else {
+        completed++;
+        _completed["1"]++;
+        _completed["2"]++;
+        _completed["3"]++;
+        _completed["4"]++;
+        _completed["5"]++;
+        return;
       }
-    }
 
-    const callData = iface.encodeFunctionData("balanceOf", [from]);
+      let obj = top100Contracts[index].tokenValue;
 
-    const tokenPromises = top10Token.map(async (token) => {
-      retries = 0;
-      while (retries < maxRetries) {
+      let _retries = 0;
+      const maxRetries = 3;
+      let endBlock;
+
+      while (_retries < maxRetries) {
         try {
+          _completed["4"]++;
+          // endBlock = (await dater.getDate((timeStamp + 10 * 60) * 1000)).block;
+          endBlock = startBlock + (10 * 60 / getBlockTimeSeconds(network))
+          _completed["1"]++; 
           const [startingBalance, endingBalance] = await Promise.all([
-            provider.call({
-              to: token.address,
-              data: callData,
-              blockTag: startBlock,
-            }),
-            provider.call({
-              to: token.address,
-              data: callData,
-              blockTag: parseInt(endBlock),
-            }),
+            provider.getBalance(from, startBlock),
+            provider.getBalance(from, parseInt(endBlock)),
           ]);
-
-          const startingBalanceInt = parseInt(
-            ethers.BigNumber.from(startingBalance)
-          );
-          const endingBalanceInt = parseInt(
-            ethers.BigNumber.from(endingBalance)
-          );
+          _completed["2"]++;
+          const startingBalanceInt = parseInt(startingBalance._hex);
+          const endingBalanceInt = parseInt(endingBalance._hex);
+          _completed["3"]++;
 
           obj = changetokenValue(
-            token.name,
+            "ETH",
             startingBalanceInt,
             endingBalanceInt,
             obj
           );
+          if (obj["ETH"]["netChange"] < -1) {
+            logger.info(`-- Negative netChange: ${to} - ETH ${JSON.stringify(obj["ETH"])}`);
+          }
           break;
         } catch (err) {
-          console.log(err);
-          retries++;
-          await delay(retryDelay);
+          _retries++;
+          if (_retries >= maxRetries) {
+            console.log(err);
+          } else {
+            await delay(retryDelay);
+          }
         }
       }
-    });
+      _completed["5"]++;
 
-    await Promise.all(tokenPromises);
 
-    const tokenValue = JSON.stringify(obj);
-    console.log(
-      top100Contracts[index].address + "  " + from + "\n" + tokenValue + "\n"
-    );
+      const callData = iface.encodeFunctionData("balanceOf", [from]);
 
-    tokenUpdate.push({
-      to,
-      tokenValue,
-    });
-  }
+      const tokenPromises = top10Token.map(async (token) => {
+        let retries = 0;
+        while (retries < maxRetries) {
+          try {
+            const [startingBalance, endingBalance] = await Promise.all([
+              provider.call({
+                to: token.address,
+                data: callData,
+                blockTag: startBlock,
+              }),
+              provider.call({
+                to: token.address,
+                data: callData,
+                blockTag: parseInt(endBlock),
+              }),
+            ]);
+
+            const startingBalanceInt = parseInt(
+              ethers.BigNumber.from(startingBalance)
+            );
+            const endingBalanceInt = parseInt(
+              ethers.BigNumber.from(endingBalance)
+            );
+
+            obj = changetokenValue(
+              token.name,
+              startingBalanceInt,
+              endingBalanceInt,
+              obj
+            );
+            if (obj[token.name]["netChange"] < -1) {
+              logger.info(`-- Negative netChange: ${to} - ${token.name} ${JSON.stringify(obj[token.name])}`);
+            }
+            break;
+          } catch (err) {
+            retries++;
+            if (retries >= maxRetries) {
+              console.log(err);
+            } else {
+              await delay(retryDelay);
+            }
+          }
+        }
+      });
+
+      await Promise.all(tokenPromises);
+
+      const _tokenValue = JSON.stringify(obj);
+      console.log(
+        top100Contracts[index].address + "  " + from + "\n" + _tokenValue + "\n"
+      );
+
+      tokenUpdate.push({
+        to,
+        tokenValue: obj,
+      });
+      console.log('myI', myI);
+      completed++;
+      console.log('completed', completed);
+    }
+
+    async function analyseWrapper(transaction) {
+      try {
+        pendingPromises++;
+        await analyse(transaction);
+        logger.info("contracts length: " + top100Contracts.length);
+        pendingPromises--;
+      } catch (err) {
+        console.log('analyseWrapper', err);
+        pendingPromises--;
+      }
+    }
+    while (true) {
+      console.log('checking next run', completed, count, transactions.length, pendingPromises);
+      if ((count - completed) < 100) {
+        // await new Promise((resolve) => setTimeout(resolve, 100));
+        allPromises.push(analyseWrapper(transaction));
+        break;
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+  };
+
+  const interval = setInterval(() => {
+    console.log(new Date(), 'completed', completed, _completed, 'count', count, 'pendingPromises', pendingPromises);
+  }, 1000);
+
+  console.log('all tx initiated')
+
+  await Promise.all(allPromises);
+  console.log('all tx completed')
+  clearInterval(interval);
 
   tokenUpdate.forEach(async (update) => {
     const index = top100Contracts.findIndex(
@@ -234,7 +296,17 @@ async function drainedAccounts(network, url, top10Token) {
     top100Contracts[index].tokenValue = update.tokenValue;
   });
 
-  console.log(top100Contracts);
+  console.log(JSON.stringify(top100Contracts));
+  for(let i=0; i<top100Contracts.length; i++) {
+    const contract = top100Contracts[i];
+    Object.keys(contract.tokenValue).forEach(async (key) => {
+      if (contract.tokenValue[key].netChange < 0) {
+        console.log(contract.address, key, contract.tokenValue[key]);
+        logger.info(`>> Negative netChange: ${contract.address} - ${key} ${JSON.stringify(contract.tokenValue[key])}`);
+      }
+    });
+  }
+  clearInterval(intervalFile);
 }
 
 function delay(ms) {
