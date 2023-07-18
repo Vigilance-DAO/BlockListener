@@ -42,4 +42,5 @@ model TransactionCount {
   time            Int
   network         String     @default("ETHEREUM_MAINNET")
 
+  @@index([to, network, time(sort: Desc)])
 }

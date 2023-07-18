@@ -29,7 +29,7 @@ function transactionCount(network, fromTimeSec, retry = 0) {
         },
       });
 
-      console.log('Number of transactions: ', allTransactions.length, new Date());
+      console.log(`${network} Number of transactions: `, allTransactions.length, new Date());
       let counts = {};
       for (let i = 0; i < allTransactions.length; i++) {
         const to = allTransactions[i].to;
@@ -51,13 +51,13 @@ function transactionCount(network, fromTimeSec, retry = 0) {
         });
       }
 
-      console.log(`Number of combinations: ${data.length}`, new Date());
+      console.log(`${network} Number of combinations: ${data.length}`, new Date());
       if (data.length > 0) {
         console.log(await prisma.TransactionCount.createMany({
           data: data,
         }))
       }
-      console.log(`Process completed: ${new Date()}`);
+      console.log(`${network} Process completed: ${new Date()}`);
       if (toTimeSec < currTime) {
         resolve(await transactionCount(network, toTimeSec));
         return 
@@ -157,7 +157,7 @@ async function startTxBatchingJob() {
   let waitTimeMs = 1000 * (timePeriod / 4);
   console.log(`\n\nWaiting for ${waitTimeMs / 1000} seconds`, new Date());
   setTimeout(() => {
-    run();
+    startTxBatchingJob();
   }, waitTimeMs);
 }
 
