@@ -7,9 +7,9 @@ const timePeriod = 60 * 60 * 12; //12 hours
 
 function transactionCount(network, fromTimeSec, retry = 0) {
   return new Promise(async (resolve, reject) => {
+    const toTimeSec = fromTimeSec + timePeriod;
+    const currTime = Math.floor(new Date().getTime() / 1000);
     try {
-      const toTimeSec = fromTimeSec + timePeriod;
-      const currTime = Math.floor(new Date().getTime() / 1000);
       if (toTimeSec > currTime) {
         console.log(`\nWaiting for new transactions: To time: ${new Date(toTimeSec * 1000)} Current time: ${new Date(currTime * 1000)}`);
         resolve(fromTimeSec);
