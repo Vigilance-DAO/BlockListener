@@ -81,9 +81,12 @@ async function fetchDataWithRetry(tx, timeStamp, provider) {
 
       return await storeData(tx, receipt.from, receipt.to, receipt.blockNumber, timeStamp);
     } catch (error) {
-      console.error('Error Fetching Tx', error);
       retries++;
-      await delay(retryDelay * (retries));
+      if (retries >= maxRetries) {
+        console.error('Error Fetching Tx', error);
+      } else {
+        await delay(retryDelay * (retries));
+      }
     }
   }
   sendMessage(`Error Fetching Tx:\n${new Date()}\nRPC: ${_provider.connection?.url}\nTx: ${tx}\ntime: ${timeStamp}`)
@@ -136,9 +139,12 @@ async function listenForNewBlock(urls, network) {
           block = await provider.getBlock(blockNumber);
           break;
         } catch (error) {
-          console.error(error);
           retries++;
-          await delay(retryDelay);
+          if (retries >= maxRetries) {
+            console.error('Error Fetching Block', error);
+          } else {
+            await delay(retryDelay);
+          }
         }
       }
 
