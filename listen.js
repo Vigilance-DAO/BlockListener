@@ -107,7 +107,7 @@ async function listenForNewBlock(urls, network) {
 
   provider.on("error", (tx) => {
     // Emitted when any error occurs
-    console.log('error', tx)
+    console.log('error tx', tx)
   });
   provider.on("block", async (blockNumber) => {
     blockBacklogCount[network]++;
@@ -179,8 +179,8 @@ function delay(ms) {
 }
 
 function startBlockTxListener() {
-  listenForNewBlock([ETHEREUM_RPC_URL, ETHEREUM_RPC_URL2], "ETHEREUM_MAINNET").catch(err => console.error(err));
-  listenForNewBlock([POLYGON_RPC_URL, POLYGON_RPC_URL2, POLYGON_RPC_URL3], "POLYGON_MAINNET").catch(err => console.error(err));
+  listenForNewBlock([ETHEREUM_RPC_URL], "ETHEREUM_MAINNET").catch(err => console.error(err));
+  listenForNewBlock([POLYGON_RPC_URL], "POLYGON_MAINNET").catch(err => console.error(err));
 }
 
 module.exports = {
