@@ -136,23 +136,23 @@ async function startTxBatchingJob() {
     await new Promise((resolve) => setTimeout(resolve, 10 * 60000)); // 10 minutes
   }
 
-  try {
-    // delete transactions older than 30 days
-    const date = new Date();
-    date.setDate(date.getDate() - 30);
-    const endTime = Math.floor(date.getTime() / 1000);
-    console.log('Deleting transactions older than: ', new Date(endTime * 1000));
-    console.log(await prisma.Transactions.deleteMany({
-      where: {
-        timeStamp: {
-          lt: endTime,
-        },
-      },
-    }));
-  } catch(error) {
-    console.log('startTxBatchingJob: delete old tx', error);
-    sendMessage(`Error in transaction count [old delete]:\n${new Date()}\nError: ${error}`)
-  }
+  // try {
+  //   // delete transactions older than 30 days
+  //   const date = new Date();
+  //   date.setDate(date.getDate() - 30);
+  //   const endTime = Math.floor(date.getTime() / 1000);
+  //   console.log('Deleting transactions older than: ', new Date(endTime * 1000));
+  //   console.log(await prisma.Transactions.deleteMany({
+  //     where: {
+  //       timeStamp: {
+  //         lt: endTime,
+  //       },
+  //     },
+  //   }));
+  // } catch(error) {
+  //   console.log('startTxBatchingJob: delete old tx', error);
+  //   sendMessage(`Error in transaction count [old delete]:\n${new Date()}\nError: ${error}`)
+  // }
 
   let waitTimeMs = 1000 * (timePeriod / 4);
   console.log(`\n\nWaiting for ${waitTimeMs / 1000} seconds`, new Date());
